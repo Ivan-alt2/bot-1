@@ -1,15 +1,19 @@
 import json
-import time
-from dotenv import load_dotenv
-import os
-import telegram
-import requests
 import logging
+import os
+import time
 from http import HTTPStatus
-from exception import (IsNot200Error,
-                       StatusResponceError,
-                       ApiError,
-                       JSONDecoderError)
+
+import requests
+import telegram
+from dotenv import load_dotenv
+
+from exception import (
+    ApiError,
+    IsNot200Error,
+    JSONDecoderError,
+    StatusResponceError,
+)
 
 
 load_dotenv()
@@ -23,7 +27,6 @@ RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
@@ -32,9 +35,7 @@ HOMEWORK_VERDICTS = {
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    '%(asctime)s, %(levelname)s, %(message)s'
-)
+formatter = logging.Formatter('%(asctime)s, %(levelname)s, %(message)s')
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -43,14 +44,11 @@ logger.addHandler(handler)
 def send_message(bot, message):
     """Отправка сообщений."""
     try:
-        message_info = f'Сообщение готово к отправке: {message}'
-        logger.debug(message_info)
+        logger.debug(f'Сообщение готово к отправке: {message}')
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        message_info = f'Сообщение отправлено: {message}'
-        logger.debug(message_info)
+        logger.debug(f'Сообщение отправлено: {message}')
     except telegram.TelegramError:
-        message_error = f'Сообщение не удалось отправить: {message}'
-        logger.error(message_error)
+        logger.error(f'Сообщение не удалось отправить: {message}')
 
 
 def get_api_answer(current_timestamp):
@@ -58,25 +56,23 @@ def get_api_answer(current_timestamp):
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
-        homework = requests.get(
+        response = requests.get(
             url=ENDPOINT,
             headers=HEADERS,
             params=params
         )
-        status_code = homework.status_code
+        status_code = response.status_code
         if status_code != HTTPStatus.OK:
             message_error = (
                 f'API {ENDPOINT} недоступен, '
                 f'код ошибки {status_code}'
             )
             raise IsNot200Error(message_error)
-        return homework.json()
+        return response.json()
     except requests.exceptions.RequestException as error_request:
-        message_error = f'Ошибка в запросе API: {error_request}'
-        raise ApiError(message_error)
+        raise ApiError(f'Ошибка в запросе API: {error_request}')
     except json.JSONDecodeError as json_error:
-        message_error = f'Ошибка json: {json_error}'
-        raise JSONDecoderError(message_error) from json_error
+        raise JSONDecoderError(f'Ошибка json: {json_error}') from json_error
 
 
 def check_response(response):
@@ -102,7 +98,9 @@ def parse_status(homework):
     if homework_name is None:
         raise KeyError('Пустое имя работы')
     if homework_status not in HOMEWORK_VERDICTS:
-        raise StatusResponceError(f'Неизвестный статус работы: {homework_status}')
+        raise StatusResponceError(
+            f'Неизвестный статус работы: {homework_status}'
+        )
     verdict = HOMEWORK_VERDICTS[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -111,7 +109,7 @@ def check_tokens():
     """Проверка наличия обязательных токенов."""
     is_check_tokens = all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
     if not is_check_tokens:
-        message_error = 'Отсутствует критически важная для работы переменная'
+        message_error = 'Отсутствует критически важная переменная окружения'
         logger.critical(message_error)
         return False
     return True
