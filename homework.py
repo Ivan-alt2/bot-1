@@ -20,7 +20,7 @@ PRACTICUM_TOKEN = os.getenv('TOKEN')
 TELEGRAM_TOKEN = os.getenv('TOKEN_TELEGRAM_BOT')
 TELEGRAM_CHAT_ID = os.getenv('CHAT_ID')
 
-RETRY_TIME = 600
+RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -45,10 +45,10 @@ def send_message(bot, message):
     """Отправка сообщений."""
     try:
         message_info = f'Сообщение готово к отправке: {message}'
-        logger.info(message_info)
+        logger.debug(message_info)
         bot.send_message(TELEGRAM_CHAT_ID, message)
         message_info = f'Сообщение отправлено: {message}'
-        logger.info(message_info)
+        logger.debug(message_info)
     except telegram.TelegramError:
         message_error = f'Сообщение не удалось отправить: {message}'
         logger.error(message_error)
@@ -66,8 +66,10 @@ def get_api_answer(current_timestamp):
         )
         status_code = homework.status_code
         if status_code != HTTPStatus.OK:
-            message_error = (f'API {ENDPOINT} недоступен, '
-                             f'код ошибки {status_code}')
+            message_error = (
+                f'API {ENDPOINT} недоступен, '
+                f'код ошибки {status_code}'
+            )
             raise IsNot200Error(message_error)
         return homework.json()
     except requests.exceptions.RequestException as error_request:
@@ -80,19 +82,15 @@ def get_api_answer(current_timestamp):
 
 def check_response(response):
     """Проверка валидности полученных данных."""
-    if response.get('homeworks') == []:
-        return {}
     if not isinstance(response, dict):
-        response_type = type(response)
-        message = f'Ответ пришел в некорректном формате: {response_type}'
-        raise EmptyDictorListError(message)
+        raise TypeError('Ответ API не является словарем')
     if 'homeworks' not in response:
-        message = 'В ответе отсутствуют необходимые ключи'
-        raise StatusResponceError(message)
+        raise StatusResponceError('В ответе отсутствуют необходимые ключи')
     homework = response.get('homeworks')
     if not isinstance(homework, list):
-        message = 'Некорректное значение в ответе у домашней работы'
-        raise StatusResponceError(message)
+        raise TypeError('Значение homeworks не является списком')
+    if not homework:
+        return []
     return homework
 
 
@@ -101,11 +99,11 @@ def parse_status(homework):
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_status is None:
-        message_error = f'Пустой статус: {homework_status}'
-        raise StatusResponceError(message_error)
+        raise StatusResponceError('Пустой статус работы')
     if homework_name is None:
-        message_error = f'Пустое имя работы: {homework_name}'
-        raise KeyError(message_error)
+        raise KeyError('Пустое имя работы')
+    if homework_status not in HOMEWORK_VERDICTS:
+        raise StatusResponceError(f'Неизвестный статус работы: {homework_status}')
     verdict = HOMEWORK_VERDICTS[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -134,7 +132,7 @@ def main():
             current_timestamp = response.get('current_date')
             homework = check_response(response)
             if homework:
-                message = parse_status(homework)
+                message = parse_status(homework[0])
                 send_message(bot, message)
             else:
                 logger.debug('Нет нового статуса')
@@ -145,7 +143,7 @@ def main():
                 last_error = message
                 send_message(bot, message)
         finally:
-            time.sleep(RETRY_TIME)
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
