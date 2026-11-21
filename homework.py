@@ -37,6 +37,8 @@ formatter = logging.Formatter(
     '%(asctime)s, %(levelname)s, %(message)s'
 )
 handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 def send_message(bot, message):
@@ -53,7 +55,7 @@ def send_message(bot, message):
 
 
 def get_api_answer(current_timestamp):
-    """Получение API с практикума."""
+    """Получение ответа от API Практикума."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
@@ -78,24 +80,24 @@ def get_api_answer(current_timestamp):
 
 def check_response(response):
     """Проверка валидности полученных данных."""
-    if response['homeworks'] == []:
+    if response.get('homeworks') == []:
         return {}
-    if type(response) != dict:
+    if not isinstance(response, dict):
         response_type = type(response)
-        message = f'Ответ пришел в неккоректном формате: {response_type}'
+        message = f'Ответ пришел в некорректном формате: {response_type}'
         raise EmptyDictorListError(message)
     if 'homeworks' not in response:
         message = 'В ответе отсутствуют необходимые ключи'
         raise StatusResponceError(message)
     homework = response.get('homeworks')
-    if type(homework) != list:
-        message = 'Неккоректное значение в ответе у домашней работы'
+    if not isinstance(homework, list):
+        message = 'Некорректное значение в ответе у домашней работы'
         raise StatusResponceError(message)
     return homework
 
 
 def parse_status(homework):
-    """Проверка статуса задания."""
+    """Формирование сообщения о статусе задания."""
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_status is None:
@@ -109,7 +111,7 @@ def parse_status(homework):
 
 
 def check_tokens():
-    """Проверка токена на наличие."""
+    """Проверка наличия обязательных токенов."""
     is_check_tokens = all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID])
     if not is_check_tokens:
         message_error = 'Отсутствует критически важная для работы переменная'
@@ -125,7 +127,7 @@ def main():
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     send_message(bot, 'Бот включен')
     current_timestamp = int(time.time())
-    LAST_ERROR = ''
+    last_error = ''
     while True:
         try:
             response = get_api_answer(current_timestamp)
@@ -139,8 +141,8 @@ def main():
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
-            if message != LAST_ERROR:
-                LAST_ERROR = message
+            if message != last_error:
+                last_error = message
                 send_message(bot, message)
         finally:
             time.sleep(RETRY_TIME)
