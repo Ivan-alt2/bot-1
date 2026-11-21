@@ -7,7 +7,6 @@ import requests
 import logging
 from http import HTTPStatus
 from exception import (IsNot200Error,
-                       EmptyDictorListError,
                        StatusResponceError,
                        ApiError,
                        JSONDecoderError)
